@@ -60,7 +60,7 @@ info()  { printf "%b  [i]%b %s\n"   "$C_CYAN"   "$C_RESET" "$*"; }
 warn()  { printf "%b  [!]%b %s\n"   "$C_YELLOW" "$C_RESET" "$*"; }
 
 kv() {
-  printf "  %b%-10s%b %s\n" "$C_GRAY" "$1" "$C_RESET" "$2"
+  printf "  %b%-10s%b %b\n" "$C_GRAY" "$1" "$C_RESET" "$2"
 }
 
 menu_item() {

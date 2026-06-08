@@ -2,8 +2,9 @@
 set -u
 
 #===============================================================================
-# exit-ip-manager — 出口IP管理器（交互菜单版）
+# exit-ip-manager — Linux 出口IP管理器（交互菜单版）
 # 基于策略路由，一键添加额外出口IP，支持回退。
+# 新IP走新网关，原IP保留原网关，原有连接不受影响。
 #
 # 用法:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/cold-sword/exit-ip-manager/main/exit-ip-manager.sh)

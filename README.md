@@ -1,15 +1,15 @@
 # exit-ip-manager
 
-Debian/Ubuntu 出口IP管理器 — 基于策略路由，一键添加额外出口IP，支持回退。
+Linux 出口IP管理器 — 基于策略路由，一键添加额外出口IP，支持回退。
 
 ## 功能
 
-- 交互式菜单，一键运行
+- 交互式菜单，一行命令运行
 - 自动检测当前网卡、IP、网关
-- 策略路由：新IP走新网关，原IP保留原网关（SSH连接不断）
+- 策略路由：新IP走新网关，原IP保留原网关，原有连接不受影响
 - `restore` 一键回退到初始状态
 - 持久化配置，重启自动恢复
-- 支持 `/etc/network/interfaces` 和 netplan
+- 适配主流 Linux 发行版
 
 ## 快速使用
 
@@ -31,7 +31,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cold-sword/exit-ip-manager/m
 ┌─────────────────────────────────┐
 │           网卡                   │
 │                                 │
-│  原IP  (SSH入口)                 │
+│  原IP  (入口/原有服务)            │
 │  新IP  (出口)                    │
 └────────────┬────────────────────┘
              │
@@ -39,7 +39,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cold-sword/exit-ip-manager/m
     │   策略路由规则    │
     │                  │
     │  from 新IP       │──→ 新网关 (全局出口)
-    │  from 原IP       │──→ 原网关 (SSH保留)
+    │  from 原IP       │──→ 原网关 (不受影响)
     │  (default)       │──→ 新网关
     └──────────────────┘
 ```

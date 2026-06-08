@@ -68,6 +68,7 @@ menu_item() {
 }
 
 pause() {
+  [ -t 0 ] || return 0
   echo
   read -r -p "  按回车返回菜单..." _
 }

@@ -46,9 +46,20 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cold-sword/exit-ip-manager/m
 
 ## 要求
 
-- Debian 9+ / Ubuntu 16.04+
+- 任意 Linux 发行版（策略路由通用）
 - root 权限
 - `iproute2` `curl`（系统自带）
+
+**持久化支持（重启自动恢复）：**
+
+| 系统 | 持久化方式 |
+|------|-----------|
+| Debian 9+ / Ubuntu | /etc/network/interfaces |
+| Ubuntu 18+ (netplan) | netplan + if-up.d |
+| RHEL / CentOS 7-9 / Rocky / Alma | NetworkManager dispatcher |
+| Fedora | NetworkManager dispatcher |
+| Arch / systemd-networkd | networkd-dispatcher |
+| Alpine | if-up.d |
 
 ## License
 

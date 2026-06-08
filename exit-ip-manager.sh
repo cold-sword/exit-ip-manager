@@ -679,6 +679,141 @@ do_backups() {
 
 # ── 主菜单 ──────────────────────────────────────────────────────────────────
 
+# ── CLI 模式（非交互） ───────────────────────────────────────────────────────
+
+cli_status() {
+  do_status
+}
+
+cli_restore() {
+  # 非交互模式下自动确认
+  echo "y" | do_restore 2>/dev/null || {
+    # 如果管道失败，直接执行核心逻辑
+    local iface=$(get_default_iface)
+    local orig_gw=$(get_default_gateway)
+    local orig_ip=$(get_ips_on_iface "$iface" | head -1 | cut -d/ -f1)
+    create_backup "cli_restore"
+    if [ -f "$MANAGED_IPS_FILE" ] && [ -s "$MANAGED_IPS_FILE" ]; then
+      while IFS='|' read -r m_iface m_ip m_gw; do
+        [ -z "$m_ip" ] && continue
+        ip addr del "$m_ip" dev "$m_iface" 2>/dev/null || true
+      done < "$MANAGED_IPS_FILE"
+    fi
+    ip rule del priority 100 2>/dev/null || true
+    ip rule del priority 200 2>/dev/null || true
+    ip route flush table $TABLE_NEW 2>/dev/null || true
+    ip route flush table $TABLE_ORIG 2>/dev/null || true
+    if [ -n "$orig_gw" ] && [ -n "$orig_ip" ]; then
+      ip route replace default via "$orig_gw" dev "$iface" src "$orig_ip"
+    fi
+    rm -f "$MANAGED_IPS_FILE" "$IFUP_SCRIPT" "$NM_DISPATCHER_SCRIPT" "$NETWORKD_DISPATCHER_SCRIPT"
+    sed -i "/${APP_NAME}/d" /etc/network/interfaces 2>/dev/null || true
+    ok "已回退到初始状态"
+  }
+}
+
+cli_add() {
+  local new_cidr="$1"
+  local new_gw="$2"
+  if [ -z "$new_cidr" ] || [ -z "$new_gw" ]; then
+    echo "用法: $0 add <IP/前缀> <网关>"
+    exit 1
+  fi
+  local new_ip="${new_cidr%/*}"
+  local iface=$(get_default_iface)
+  local orig_gw=$(get_default_gateway)
+  local orig_ip=$(get_ips_on_iface "$iface" | head -1 | cut -d/ -f1)
+
+  if [ -z "$iface" ]; then
+    fail "无法检测默认网卡"
+    exit 1
+  fi
+
+  header
+  section "添加出口IP (CLI)"
+  kv "网卡"   "$iface"
+  kv "新IP"   "$new_cidr"
+  kv "新网关" "$new_gw"
+  echo
+
+  create_backup "cli_add_${new_ip}"
+
+  if ip addr show "$iface" 2>/dev/null | grep -q "$new_ip/"; then
+    warn "IP $new_ip 已存在于 $iface，跳过添加"
+  else
+    ip addr add "$new_cidr" dev "$iface" || { fail "IP 添加失败"; exit 1; }
+    ok "IP 已添加"
+  fi
+
+  if ping -c 1 -W 2 "$new_gw" >/dev/null 2>&1; then
+    ok "网关 $new_gw 可达"
+  else
+    warn "网关 $new_gw 不可达"
+  fi
+
+  ip route add default via "$new_gw" dev "$iface" table $TABLE_NEW 2>/dev/null || true
+  ip rule add from "$new_ip" table $TABLE_NEW priority 100 2>/dev/null || true
+
+  if [ -n "$orig_gw" ] && [ -n "$orig_ip" ]; then
+    ip route add default via "$orig_gw" dev "$iface" table $TABLE_ORIG 2>/dev/null || true
+    ip rule add from "$orig_ip" table $TABLE_ORIG priority 200 2>/dev/null || true
+  fi
+
+  ip route replace default via "$new_gw" dev "$iface" src "$new_ip"
+
+  echo "${iface}|${new_cidr}|${new_gw}" >> "$MANAGED_IPS_FILE"
+  sort -u "$MANAGED_IPS_FILE" -o "$MANAGED_IPS_FILE"
+  persist_config
+
+  sleep 1
+  local exit_ip=$(get_exit_ip)
+  ok "出口IP: ${C_BOLD}${exit_ip}${C_RESET}"
+  echo
+  line
+}
+
+cli_remove() {
+  local target_cidr="$1"
+  if [ -z "$target_cidr" ]; then
+    echo "用法: $0 remove <IP/前缀>"
+    exit 1
+  fi
+  local target_ip="${target_cidr%/*}"
+  local iface=$(get_default_iface)
+
+  header
+  section "移除出口IP (CLI)"
+
+  create_backup "cli_remove_${target_ip}"
+
+  ip addr del "$target_cidr" dev "$iface" 2>/dev/null || true
+  ip route del default table $TABLE_NEW 2>/dev/null || true
+  ip rule del from "$target_ip" table $TABLE_NEW priority 100 2>/dev/null || true
+
+  grep -v "|${target_cidr}|" "$MANAGED_IPS_FILE" > "${MANAGED_IPS_FILE}.tmp" 2>/dev/null
+  mv "${MANAGED_IPS_FILE}.tmp" "$MANAGED_IPS_FILE" 2>/dev/null || rm -f "$MANAGED_IPS_FILE"
+
+  if [ ! -f "$MANAGED_IPS_FILE" ] || [ ! -s "$MANAGED_IPS_FILE" ]; then
+    ip rule del priority 100 2>/dev/null || true
+    ip rule del priority 200 2>/dev/null || true
+    ip route flush table $TABLE_NEW 2>/dev/null || true
+    ip route flush table $TABLE_ORIG 2>/dev/null || true
+    local orig_gw=$(get_default_gateway)
+    local orig_ip=$(get_ips_on_iface "$iface" | head -1 | cut -d/ -f1)
+    ip route replace default via "$orig_gw" dev "$iface" src "$orig_ip" 2>/dev/null || true
+    rm -f "$IFUP_SCRIPT" "$NM_DISPATCHER_SCRIPT" "$NETWORKD_DISPATCHER_SCRIPT"
+    sed -i "/${APP_NAME}/d" /etc/network/interfaces 2>/dev/null || true
+  fi
+
+  sleep 1
+  local exit_ip=$(get_exit_ip)
+  ok "当前出口IP: ${C_BOLD}${exit_ip}${C_RESET}"
+  echo
+  line
+}
+
+# ── 主菜单（交互模式） ────────────────────────────────────────────────────────
+
 main_menu() {
   while true; do
     header
@@ -720,4 +855,33 @@ main_menu() {
   done
 }
 
-main_menu
+# ── 入口 ────────────────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  status)
+    cli_status
+    ;;
+  restore)
+    cli_restore
+    ;;
+  add)
+    cli_add "${2:-}" "${3:-}"
+    ;;
+  remove)
+    cli_remove "${2:-}"
+    ;;
+  -h|--help|help)
+    echo "exit-ip-manager — Linux 出口IP管理器"
+    echo ""
+    echo "用法:"
+    echo "  $0              交互式菜单"
+    echo "  $0 status       查看状态"
+    echo "  $0 add <IP/前缀> <网关>  添加出口IP"
+    echo "  $0 remove <IP/前缀>      移除出口IP"
+    echo "  $0 restore      回退到初始状态"
+    exit 0
+    ;;
+  *)
+    main_menu
+    ;;
+esac

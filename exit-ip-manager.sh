@@ -177,7 +177,7 @@ TABLE_NEW=100
 TABLE_ORIG=200
 [ ! -f "$MANAGED_IPS_FILE" ] && exit 0
 
-while IFS='|' read -r iface ip_cidr gw; do
+while IFS='|' read -r iface ip_cidr gw orig_ip orig_gw; do
   [ -z "$iface" ] && continue
   local_ip="${ip_cidr%/*}"
 
@@ -185,11 +185,9 @@ while IFS='|' read -r iface ip_cidr gw; do
   ip route add default via "$gw" dev "$iface" table $TABLE_NEW 2>/dev/null || true
   ip rule add from "$local_ip" table $TABLE_NEW priority 100 2>/dev/null || true
 
-  ORIG_GW=$(ip -4 route show default dev "$iface" 2>/dev/null | awk 'NR==1{print $3}' || true)
-  ORIG_IP=$(ip -o -4 addr show dev "$iface" scope global 2>/dev/null | awk 'NR==1{print $4}' || true)
-  if [ -n "$ORIG_GW" ] && [ -n "$ORIG_IP" ]; then
-    ip route add default via "$ORIG_GW" dev "$iface" table $TABLE_ORIG 2>/dev/null || true
-    ip rule add from "${ORIG_IP%/*}" table $TABLE_ORIG priority 200 2>/dev/null || true
+  if [ -n "$orig_gw" ] && [ -n "$orig_ip" ]; then
+    ip route add default via "$orig_gw" dev "$iface" table $TABLE_ORIG 2>/dev/null || true
+    ip rule add from "$orig_ip" table $TABLE_ORIG priority 200 2>/dev/null || true
   fi
 
   ip route replace default via "$gw" dev "$iface" src "$local_ip" 2>/dev/null || true
@@ -235,7 +233,7 @@ TABLE_ORIG=200
 
 [ ! -f "$MANAGED_IPS_FILE" ] && exit 0
 
-while IFS='|' read -r iface ip_cidr gw; do
+while IFS='|' read -r iface ip_cidr gw orig_ip orig_gw; do
   [ -z "$iface" ] && continue
   [ "$iface" != "$INTERFACE" ] && continue
 
@@ -245,11 +243,9 @@ while IFS='|' read -r iface ip_cidr gw; do
   ip route add default via "$gw" dev "$iface" table $TABLE_NEW 2>/dev/null || true
   ip rule add from "$local_ip" table $TABLE_NEW priority 100 2>/dev/null || true
 
-  ORIG_GW=$(ip -4 route show default dev "$iface" 2>/dev/null | awk 'NR==1{print $3}' || true)
-  ORIG_IP=$(ip -o -4 addr show dev "$iface" scope global 2>/dev/null | awk 'NR==1{print $4}' || true)
-  if [ -n "$ORIG_GW" ] && [ -n "$ORIG_IP" ]; then
-    ip route add default via "$ORIG_GW" dev "$iface" table $TABLE_ORIG 2>/dev/null || true
-    ip rule add from "${ORIG_IP%/*}" table $TABLE_ORIG priority 200 2>/dev/null || true
+  if [ -n "$orig_gw" ] && [ -n "$orig_ip" ]; then
+    ip route add default via "$orig_gw" dev "$iface" table $TABLE_ORIG 2>/dev/null || true
+    ip rule add from "$orig_ip" table $TABLE_ORIG priority 200 2>/dev/null || true
   fi
 
   ip route replace default via "$gw" dev "$iface" src "$local_ip" 2>/dev/null || true
@@ -280,7 +276,7 @@ TABLE_ORIG=200
 
 [ ! -f "$MANAGED_IPS_FILE" ] && exit 0
 
-while IFS='|' read -r m_iface ip_cidr gw; do
+while IFS='|' read -r m_iface ip_cidr gw orig_ip orig_gw; do
   [ -z "$m_iface" ] && continue
   [ "$m_iface" != "$IFACE" ] && continue
 
@@ -290,11 +286,9 @@ while IFS='|' read -r m_iface ip_cidr gw; do
   ip route add default via "$gw" dev "$m_iface" table $TABLE_NEW 2>/dev/null || true
   ip rule add from "$local_ip" table $TABLE_NEW priority 100 2>/dev/null || true
 
-  ORIG_GW=$(ip -4 route show default dev "$m_iface" 2>/dev/null | awk 'NR==1{print $3}' || true)
-  ORIG_IP=$(ip -o -4 addr show dev "$m_iface" scope global 2>/dev/null | awk 'NR==1{print $4}' || true)
-  if [ -n "$ORIG_GW" ] && [ -n "$ORIG_IP" ]; then
-    ip route add default via "$ORIG_GW" dev "$m_iface" table $TABLE_ORIG 2>/dev/null || true
-    ip rule add from "${ORIG_IP%/*}" table $TABLE_ORIG priority 200 2>/dev/null || true
+  if [ -n "$orig_gw" ] && [ -n "$orig_ip" ]; then
+    ip route add default via "$orig_gw" dev "$m_iface" table $TABLE_ORIG 2>/dev/null || true
+    ip rule add from "$orig_ip" table $TABLE_ORIG priority 200 2>/dev/null || true
   fi
 
   ip route replace default via "$gw" dev "$m_iface" src "$local_ip" 2>/dev/null || true
@@ -473,7 +467,7 @@ do_add() {
   ip route replace default via "$new_gw" dev "$iface" src "$new_ip"
 
   # 6. 持久化
-  echo "${iface}|${new_cidr}|${new_gw}" >> "$MANAGED_IPS_FILE"
+  echo "${iface}|${new_cidr}|${new_gw}|${orig_ip}|${orig_gw}" >> "$MANAGED_IPS_FILE"
   sort -u "$MANAGED_IPS_FILE" -o "$MANAGED_IPS_FILE"
   persist_config
 
@@ -762,7 +756,7 @@ cli_add() {
 
   ip route replace default via "$new_gw" dev "$iface" src "$new_ip"
 
-  echo "${iface}|${new_cidr}|${new_gw}" >> "$MANAGED_IPS_FILE"
+  echo "${iface}|${new_cidr}|${new_gw}|${orig_ip}|${orig_gw}" >> "$MANAGED_IPS_FILE"
   sort -u "$MANAGED_IPS_FILE" -o "$MANAGED_IPS_FILE"
   persist_config
 
